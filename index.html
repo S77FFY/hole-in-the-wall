@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#120a0c">
 <meta name="app-repo" content="hole-in-the-wall">
-<meta name="app-version" content="1.0.9">
+<meta name="app-version" content="1.0.10">
 <title>HOLE IN THE WALL</title>
 <style>
 html,body{margin:0;height:100%;background:#120a0c;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -20,12 +20,13 @@ canvas{display:block;flex:none;image-rendering:pixelated;image-rendering:crisp-e
 <script>
 'use strict';
 /* =====================================================================
-   HOLE IN THE WALL  ·  THIS IS NOT A GAME
+   HOLE IN THE WALL  ·  A CASH TIME MACHINE GAME
    A single-file, zero-dependency ARG about a cash machine.
    ===================================================================== */
-const VERSION = '1.0.9';
+const VERSION = '1.0.10';
 const W = 240, H = 416;
-const DAY_MS = 20 * 60 * 1000;            // 23:00 -> 00:00 in 20 real minutes
+const DAY_MS = 20 * 60 * 1000;
+const WARN = [[30, '23:30 · HALF AN HOUR TO MIDNIGHT'], [45, '23:45 · FIFTEEN MINUTES TO MIDNIGHT'], [50, '23:50 · TEN MINUTES TILL IT ALL RESETS'], [55, '23:55 · FIVE MINUTES LEFT IN THIS LOOP'], [59, '23:59 · ONE MINUTE']];            // 23:00 -> 00:00 in 20 real minutes
 const cv = document.getElementById('c');
 let ctx = cv.getContext('2d');
 const mainCtx = ctx;
@@ -171,6 +172,7 @@ const SFX = {
   bell() { tone(392, 1.6, 'sine', 0.08); tone(784, 1.2, 'sine', 0.03); tone(1176, 0.8, 'sine', 0.02); },
   hatch() { noise(0.2, 0.1, 0, 3000, 'highpass'); tone(200, 0.4, 'square', 0.025, 0.1, 90); noise(0.3, 0.12, 0.4, 600); },
   tick() { tone(2400, 0.02, 'square', 0.018); },
+  watch() { tone(3136, 0.07, 'square', 0.03); tone(3136, 0.07, 'square', 0.03, 0.14); },
   fanfare() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i === 5 ? 0.6 : 0.14, 'square', 0.045, i * 0.14)); },
   glitch() { for (let i = 0; i < 6; i++) tone(100 + Math.random() * 1500, 0.05, 'square', 0.035, i * 0.05); },
   step() { noise(0.05, 0.05, 0, 300); },
@@ -337,7 +339,7 @@ const mkCoin = () => ({ id: IID++, kind: 'coin', coin: 'sovereign' });
 const CARDNAME = { debit: 'DEBIT', member: 'MEMBER', gold: 'GOLD', engineer: 'ENGINEER', founder: 'FOUNDER' };
 const NOTECOL = { 500: '#3a9c86', 1000: '#cf7d34', 2000: '#8a58b4', 5000: '#c4433b', 50: '#9a4b36', 100: '#4b8248' };
 const PHONE = '07700900042';
-const NOTE_POOL = ['PERCY WAS HERE', 'IS IT MIDNIGHT YET?', 'DAY 6. STILL HERE.', 'THE DOT IS ALIVE', 'WHO BUILT THE WALL?', 'MONEY IS A PROMISE', 'I SAW MYSELF WALK AWAY', "DON'T TAP THE GLASS", 'HE KEEPS SCORE', 'THE WALL LISTENS', 'COUNT FROM THE GROUND', 'EVERYTHING RESETS', 'TEN BOB = 50P', 'SEE YOU YESTERDAY', 'WHAT DOES PERCY WANT?', 'ASK HIM', 'NOT A GAME'];
+const NOTE_POOL = ['PERCY WAS HERE', 'IS IT MIDNIGHT YET?', 'LOOP 6. STILL HERE.', "IT'S ALWAYS 23:00", 'THE DOT IS ALIVE', 'WHO BUILT THE WALL?', 'MONEY IS A PROMISE', 'I SAW MYSELF WALK AWAY', "DON'T TAP THE GLASS", 'HE KEEPS SCORE', 'THE WALL LISTENS', 'COUNT FROM THE GROUND', 'EVERYTHING RESETS', 'TEN BOB = 50P', 'SEE YOU YESTERDAY', 'WHAT DOES PERCY WANT?', 'ASK HIM', 'NOT A GAME'];
 
 function noteVal(n) { return n.era ? 0 : (n.half ? n.denom / 2 : n.denom); }
 function noteLabel(n) {
@@ -367,30 +369,29 @@ function startWallet() {
   w.push(letterItem());
   return w;
 }
+const LETTER0 = 'DEAR A N OTHER,\n\nWELCOME TO THE PERPETUAL BUILDING SOCIETY. YOUR NEW CARD IS ENCLOSED.\n\nOUR CASHPOINT IN THE WALL IS OPEN UNTIL MIDNIGHT. AT MIDNIGHT, EVERYTHING IS AS IT WAS.\n\nPLEASE NEVER WRITE YOUR PIN DOWN.\n\nYOURS PERPETUALLY,\nTHE SOCIETY\nEST. 1887';
 function letterItem() {
-  if (SAVE.day <= 1 && !SAVE.completed) {
-    return mkPaper('letter', 'LETTER', wrap('DEAR A N OTHER,\n\nWELCOME TO THE PERPETUAL BUILDING SOCIETY. YOUR NEW CARD IS ENCLOSED.\n\nOUR CASHPOINT IN THE WALL IS OPEN UNTIL MIDNIGHT. AT MIDNIGHT, EVERYTHING IS AS IT WAS.\n\nPLEASE NEVER WRITE YOUR PIN DOWN.\n\nYOURS PERPETUALLY,\nTHE SOCIETY\nEST. 1887', 36));
-  }
+  if (SAVE.day <= 1 && !SAVE.completed) return mkPaper('letter', 'LETTER', wrap(LETTER0, 36));
   if (SAVE.completed) {
     return mkPaper('letter', 'LETTER', wrap('DEAR FOUNDER,\n\nTHANK YOU FOR YOUR DEPOSIT OF 1887. IT HAS DONE WELL.\n\nPERCY ASKS AFTER YOU. YOUR FOUNDER CARD IS ENCLOSED. HE SAYS IT DOES SOMETHING IF YOU PUT IT IN.\n\nSEE YOU YESTERDAY.\n\nTHE SOCIETY', 36));
   }
   const s = SAVE.maxStage; const stuck = SAVE.day - SAVE.stageDay;
   const h = HINTS[Math.min(s, HINTS.length - 1)];
   const hint = stuck >= 2 ? h[1] : h[0];
-  let body = 'DEAR MEMBER,\n\nOUR RECORDS SHOW YOU HAVE VISITED US ' + (SAVE.day - 1) + (SAVE.day === 2 ? ' TIME' : ' TIMES') + '. PERCY DOES NOT REMEMBER. HE NEVER DOES.\n\n' + hint + '\n\n';
-  if (SAVE.visited1967) body += 'P.S. ACCOUNT 0042 WAS OPENED IN 1967. THE PAST, UNLIKE THE PRESENT, STAYS DONE.\n\n';
-  if (SAVE.endings.paradox) body += 'P.P.S. FOR ONE MOMENT LAST NIGHT, WE DID NOT EXIST. PLEASE DO NOT DO THAT AGAIN.\n\n';
-  body += 'YOURS PERPETUALLY,\nTHE SOCIETY';
+  // a loop can't send you a new letter, so it's the same one... but something of you gets through
+  let body = LETTER0 + '\n\n- - - - - - - - - - - - - - - - -\nSCRAWLED ACROSS THE BOTTOM, IN YOUR OWN HANDWRITING:\n\n"LOOP ' + SAVE.day + '. ' + hint + '"';
+  if (SAVE.visited1967) body += '\n\n"ACCOUNT 0042 WAS OPENED IN 1967. THE PAST, UNLIKE THE PRESENT, STAYS DONE."';
+  if (SAVE.endings.paradox) body += '\n\n"DON\'T KEEP THE MILLION. FOR A MOMENT LAST TIME, NOTHING EXISTED."';
   return mkPaper('letter', 'LETTER', wrap(body, 36));
 }
 const HINTS = [
-  ['THE SIGN ABOVE OUR CASHPOINT HAS ALWAYS KNOWN YOUR PIN.', 'YOUR PIN IS FOUR DIGITS AND IT IS WRITTEN ABOVE THE MACHINE, AFTER "EST."'],
-  ['OUR MOST LOYAL MEMBERS SIMPLY REPEAT YESTERDAY. YOUR OLD RECEIPT REMEMBERS IT FOR YOU.', 'DO EXACTLY WHAT THE OLD RECEIPT SAYS, ONE TRANSACTION AT A TIME: DEPOSIT £10, BALANCE, DEPOSIT £20, BALANCE, WITHDRAW £50.'],
-  ['YOUR MEMBERSHIP PIN IS SIMPLY WHAT YOU GAVE US, IN ORDER.', 'YOU GAVE US £10 AND THEN £20. FOUR DIGITS.'],
+  ['THE SIGN ABOVE THE CASHPOINT HAS ALWAYS KNOWN THE PIN.', 'YOUR PIN IS FOUR DIGITS AND IT IS WRITTEN ABOVE THE MACHINE, AFTER "EST."'],
+  ['REPEAT YESTERDAY. THE OLD RECEIPT REMEMBERS IT.', 'DO EXACTLY WHAT THE OLD RECEIPT SAYS, ONE TRANSACTION AT A TIME: DEPOSIT £10, BALANCE, DEPOSIT £20, BALANCE, WITHDRAW £50.'],
+  ['THE MEMBER PIN IS WHAT YOU GAVE, IN THE ORDER YOU GAVE IT.', '£10, THEN £20. FOUR DIGITS.'],
   ['PERCY HAS LEFT YOU MESSAGES. HE IS CURIOUS ABOUT PENNIES.', 'HALF OF A £5 NOTE IS WORTH £2.50. TEAR IT, DEPOSIT HALF, AND SEE WHAT THE DECIMAL POINT DOES.'],
-  ['OUR GOLD MEMBERS HOLD £1,000 OR MORE.', 'DEPOSIT MORE BEFORE THE PENNY APPEARS. EACH POINT YOU WIN MOVES THE DECIMAL POINT ONE PLACE.'],
+  ['GOLD MEMBERS HOLD £1,000 OR MORE.', 'DEPOSIT MORE BEFORE THE PENNY APPEARS. EACH POINT YOU WIN MOVES THE DECIMAL POINT ONE PLACE.'],
   ['PERCY IS VERY PROUD OF HIS HIGH SCORE.', "THE GOLD PIN IS PERCY'S BEST: LOOK FOR PCY ON THE HIGH SCORE TABLE."],
-  ['SOMEBODY WROTE A NUMBER ON ONE OF OUR FIFTIES.', 'GOLD › MORE › MOBILE TOP-UP. THE NUMBER IS ON THE £50 FROM YOUR LOYALTY BONUS.'],
+  ['SOMEBODY WROTE A NUMBER ON ONE OF THE FIFTIES.', 'GOLD › MORE › MOBILE TOP-UP. THE NUMBER IS ON THE £50 FROM THE LOYALTY BONUS.'],
   ['ENGINEERS ALWAYS NEED THE DATE OF THE LAST SERVICE.', 'IT IS ON YOUR MINI STATEMENT. ENTER IT AS DDMMYY.'],
   ['EVERY MACHINE SHOULD TEST ITSELF NOW AND THEN.', 'SERVICE MODE › 1 SELF-TEST. WATCH THE KEYS, THEN PRESS THEM BACK.'],
   ["CASSETTE 4 IS LOCKED WITH SOMEBODY'S SCORE.", "PERCY'S JOURNAL SAYS WHOSE. CHECK THE HIGH SCORE TABLE OR YOUR STATEMENT."],
@@ -419,7 +420,7 @@ function newDay() {
     looseBrick: !!SAVE.visited1967, brickOut: false, brickT: 0, sketch: false, removed: {}, removedT: {}, portal: false, portalT: 0, portalYear: 0,
     vanish: {}, timers: [], press: {}, lit: {}, hold: {}, glassN: 0, blankN: 0, helpN: {}, clockSynced: false, pinTries: {},
     pong: null, simon: null, say: null, travel: null, gearSpin: 0, retained: [], flapOpen: false, chatI: 0,
-    hg: { id: null, i: 0, t: 0, sig: '' }, bubble: null, taunt: null, lastInput: 0, collectT: 0, collectN: 0, kept: [], tauntUsed: {},
+    hg: { id: null, i: 0, t: 0, sig: '' }, warned: {}, watchFlash: -9, lastTick: -1, bubble: null, taunt: null, lastInput: 0, collectT: 0, collectN: 0, kept: [], tauntUsed: {},
     decimalOK: !!SAVE.decimal71, rng: mulberry((Date.now() ^ (SAVE.day * 7919)) >>> 0), usedMsgs: {}, clockStop: false, wobble: 0, glitch: 0, signFlash: 0,
   };
   S.wallet = startWallet();
@@ -485,7 +486,7 @@ function Ct(i, t, c, sc) { txt(t, 120, ly(i), c || th.fg, { al: 'c', sc: sc || 1
 function Rt(i, t, c) { txt(t, 183, ly(i), c || th.fg, { al: 'r' }); }
 function Pt(i, t, c, al) { wrap(t, 25).forEach((l, k) => al === 'l' ? Lt(i + k, l, c) : Ct(i + k, l, c)); }
 function optDraw(id, label) { const side = id[0], r = +id[1], line = 3 + 2 * r; if (side === 'L') txt('<' + label, 57, ly(line), th.hi); else txt(label + '>', 183, ly(line), th.hi, { al: 'r' }); }
-function footer() { if (S.era === 1967) { Lt(10, '27 JUN 1967', th.dim); return; } if (S.era === 1971) { Lt(10, '15 FEB 1971', th.dim); return; } Lt(10, clockStr(), th.dim); Rt(10, 'DAY ' + SAVE.day, th.dim); }
+function footer() { if (S.era === 1967) { Lt(10, '27 JUN 1967', th.dim); return; } if (S.era === 1971) { Lt(10, '15 FEB 1971', th.dim); return; } Lt(10, clockStr(), th.fg); Rt(10, 'LOOP ' + SAVE.day, th.dim); }
 function clockStr() { if (S.dayMs >= DAY_MS) return '00:00'; return '23:' + pad2(Math.floor(S.dayMs / DAY_MS * 60)); }
 function inputMask(s, n, ch) { let o = ''; for (let i = 0; i < n; i++) o += (i < s.length ? (ch || s[i]) : '_') + (i < n - 1 ? ' ' : ''); return o; }
 function isDigit(k) { return k.length === 1 && k >= '0' && k <= '9'; }
@@ -509,14 +510,14 @@ const CHAT = [
   [["IT'S LATE. MIND HOW", 'YOU GO.'], ['ALL TRANSACTIONS ARE IN', 'WHOLE POUNDS.'], ["I'VE BEEN IN THIS WALL", 'SINCE 1967.'], ['NOBODY READS THE OLD', 'RECEIPTS. NOBODY.']],
   [['DID YOU READ YOUR', 'MESSAGES?'], ['I HAVE NEVER SEEN', 'A PENNY.'], ['PATTERNS. I LIKE', 'PATTERNS.']],
   [['THE DOT IS STILL', 'OUT THERE.'], ['GOLD SUITS YOU.', ''], ['I COULD USE SOME', 'PHONE CREDIT.']],
-  [['THE WALL IS LISTENING.', ''], ['EVERY MIDNIGHT I', 'FORGET. DO YOU?'], ["WHAT'S IT LIKE,", 'HAVING A TOMORROW?']],
+  [['THE WALL IS LISTENING.', ''], ['EVERY MIDNIGHT I', 'FORGET. DO YOU?'], ['NEITHER OF US GETS', 'A TOMORROW. DO WE?']],
   [["IT WAS YOU IN 1967.", "WASN'T IT?"], ['THE BRICKS ARE OLDER', 'THAN THE MONEY.'], ['SEE YOU YESTERDAY.', '']],
 ];
 function greet() {
   if (SAVE.completed) return 'HELLO, FOUNDER.';
   if (SAVE.day <= 1) return 'WELCOME';
   if (SAVE.day <= 3) return 'HAVE WE MET?';
-  return 'YOU AGAIN.';
+  return 'FUNNY. DEJA VU.';
 }
 def('idle', {
   enter(s) { S.flapOpen = false; },
@@ -918,7 +919,7 @@ function statementLines() {
     rowLR('27JUN67 OPENED', '10/-'), rowLR('15FEB71 DECIMAL DAY', '50P'), rowLR('09OCT87 SERVICE', 'ENG JTG'), rowLR('09OCT87 PONG', 'JTG 1987'),
     rowLR('31DEC99 PARTY', '£1999'), rowLR('01JAN00 Y2K', 'OK'),
     rowLR('TODAY LOYALTY', '+£20'), rowLR('TODAY BALANCE', fmt(S.bal)), rowLR('TODAY SAVINGS', fmt(S.sav)), '--------------------------',
-    'INTEREST IS PAID AT', 'MIDNIGHT. EVERY MIDNIGHT.', '', 'THE FIRST DEPOSIT WAS', 'MADE BY A STRANGER. WE', 'NEVER SAW THEIR FACE.'];
+    'INTEREST NEEDS YEARS.', 'AN HOUR EARNS NOTHING.', '', 'THE FIRST DEPOSIT WAS', 'MADE BY A STRANGER. WE', 'NEVER SAW THEIR FACE.'];
 }
 function doStatement() {
   if (S.out.receipt) { SFX.err(); msg(['PLEASE TAKE YOUR', 'RECEIPT FIRST'], 'menu'); return; }
@@ -929,7 +930,7 @@ def('savings', {
   opts() { return { L0: ['TO CURRENT', () => { S.bal += S.sav; S.sav = 0; S.tx.push('CUR'); SFX.ok(); }], L1: ['TO SAVINGS', () => { S.sav += S.bal; S.bal = 0; S.tx.push('SAV'); SFX.ok(); }], R3: ['BACK', () => go('menu')] }; },
   draw() {
     Ct(0, 'SAVINGS A/C 0042', th.hi); Ct(1, (S.decimalOK || !(S.sav % 100) ? fmt(S.sav) : fmt(Math.floor(S.sav / 100) * 100) + ' AND SOMETHING') + (SAVE.visited1967 && S.decimalOK ? ' SINCE 1967' : ''), th.fg);
-    Ct(2, 'CURRENT ' + fmt(S.bal), th.dim); Rt(4, 'RATE 10% P.A.', th.dim); Rt(6, 'INTEREST PAID', th.dim); Rt(7, 'AT MIDNIGHT.', th.dim);
+    Ct(2, 'CURRENT ' + fmt(S.bal), th.dim); Rt(4, 'RATE 10% P.A.', th.dim); Rt(6, 'MONEY NEEDS YEARS.', th.dim); Rt(7, 'YOU HAVE AN HOUR.', th.dim);
   },
   key(s, k) { if (k === 'CANCEL') go('menu'); },
 });
@@ -975,7 +976,7 @@ def('founder', {
   opts() { return { R3: ['RETURN CARD', () => finish({})] }; },
   draw() {
     Ct(0, 'WELCOME BACK, FOUNDER.', th.hi);
-    const c = SAVE.completed || {}; Ct(2, 'COMPLETED ON DAY ' + (c.day || '?'), th.fg); Ct(3, 'IN ' + Math.max(1, Math.round((c.ms || 0) / 60000)) + ' MINUTES', th.fg);
+    const c = SAVE.completed || {}; Ct(2, 'ESCAPED ON LOOP ' + (c.day || '?'), th.fg); Ct(3, 'IN ' + Math.max(1, Math.round((c.ms || 0) / 60000)) + ' MINUTES', th.fg);
     const e = SAVE.endings; Ct(5, 'ENDINGS ' + ['perpetual', 'paradox', 'greed'].filter(k => e[k]).length + ' OF 3', th.dim);
     Ct(7, 'A GAME BY S77FFY', th.dim);
   },
@@ -1469,7 +1470,7 @@ def('final', {
     SAVE.endings.perpetual = true; if (!SAVE.completed) SAVE.completed = { day: SAVE.day, ms: SAVE.totalMs }; persist();
   },
   update(s) { if (s.t > 7.5) startEnding(); },
-  draw(s) { if (s.t > 0.4) Ct(2, 'THIS IS NOT A GAME.', th.hi); if (s.t > 2.4) Ct(4, "IT'S A LOOP."); if (s.t > 4.4) Ct(7, 'SEE YOU YESTERDAY.', th.dim); },
+  draw(s) { if (s.t > 0.4) Ct(2, 'THE LOOP IS CLOSED.', th.hi); if (s.t > 2.4) Ct(4, 'MIDNIGHT CAN COME NOW.'); if (s.t > 4.4) Ct(7, 'SEE YOU YESTERDAY.', th.dim); },
 });
 def('paradox', {
   theme: 'wall',
@@ -1839,6 +1840,7 @@ function tap(x, y) {
     titleCancel = 0; startGame(true); return;
   }
   if (PH === 'intro') { if (PHT > 0.3) PHT = introLen(); return; }
+  if (PH === 'daycard') { if (PHT > 0.8) PHT = 99; return; }
   if (PH === 'ending') { if (PHT > 10) { PH = 'daycard'; PHT = 0; SAVE.day++; persist(); } return; }
   if (PH !== 'play') return;
   if (inR(p, RECT.leave)) { if (S.leaveAsk && T - S.leaveAsk < 3) { S.leaveAsk = 0; startMidnight('leave'); } else { S.leaveAsk = T; say('WALK AWAY? TAP AGAIN.'); } return; }
@@ -1930,12 +1932,17 @@ function update(dt) {
   if (PH === 'title') return;
   if (PH === 'intro') { if (PHT >= introLen()) { PH = 'play'; PHT = 0; } }
   if (PH === 'midnight') { if (PHT > 4) { PH = 'daycard'; PHT = 0; SAVE.day++; persist(); } return; }
-  if (PH === 'daycard') { if (PHT > 2.6) { startGame(); } return; }
+  if (PH === 'daycard') { if (PHT > dayCardLen()) { startGame(); } return; }
   if (PH === 'ending') { return; }
   if (PH === 'play') {
     if (!S.clockStop && S.era === 2026 && !S.travel) S.dayMs += dt * 1000;
     SAVE.totalMs += dt * 1000;
     if (S.dayMs >= DAY_MS) { S.dayMs = DAY_MS; startMidnight('midnight'); return; }
+    if (S.era === 2026) {
+      const m = Math.floor(S.dayMs / DAY_MS * 60);
+      for (const [wm, line] of WARN) if (m >= wm && !S.warned[wm]) { S.warned[wm] = true; if (m - wm < 2) { S.watchFlash = T; SFX.watch(); say(line); } }
+      if (m >= 59) { const sec = Math.floor(S.dayMs / 1000); if (sec !== S.lastTick) { S.lastTick = sec; SFX.tick(); } }
+    }
   }
   // timers
   if (S.timers.length) { const due = []; S.timers = S.timers.filter(t => { t.t -= dt; if (t.t <= 0) { due.push(t); return false; } return true; }); due.forEach(t => t.fn()); }
@@ -1983,6 +1990,7 @@ function render() {
   if (close) { ctx.imageSmoothingEnabled = false; ctx.drawImage(WCV, OX + Math.round(vx), OY + Math.round(vy), CW, CH, 0, 0, CW, CH); }
   else { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(WCV, OX + vx, OY + vy, vw, vh, 0, 0, CW, CH); ctx.imageSmoothingEnabled = false; }
   if (PH === 'title' || (PH === 'intro' && introFromTitle)) drawTitleOverlay();
+  if (PH === 'intro') drawIntroCaption();
   // you: hands and wallet (phone), or the wallet and item panels (landscape)
   if (LS.on) { drawWalletPanel(); drawItemPanel(); } else drawHands();
   drawTopIcons();
@@ -2164,12 +2172,12 @@ function drawTitleOverlay() {
   const g = ctx.createLinearGradient(0, 0, 0, 104); g.addColorStop(0, 'rgba(6,4,10,0.85)'); g.addColorStop(1, 'rgba(6,4,10,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, CW, 104);
   txt('HOLE IN', cx, 20, '#ffd84a', { al: 'c', sc: 3, sh: '#5a2a08' });
   txt('THE WALL', cx, 43, '#ffd84a', { al: 'c', sc: 3, sh: '#5a2a08' });
-  txt('THIS IS NOT A GAME', cx, 70, '#eef3ff', { al: 'c', sh: '#000' });
+  txt('A CASH TIME MACHINE GAME', cx, 70, '#eef3ff', { al: 'c', sh: '#000' });
   const b = ctx.createLinearGradient(0, CH - 56, 0, CH); b.addColorStop(0, 'rgba(6,4,10,0)'); b.addColorStop(1, 'rgba(6,4,10,0.8)'); ctx.fillStyle = b; ctx.fillRect(0, CH - 56, CW, 56);
   if (PH === 'title') {
     if (resetPrompt) { txt('FORGET EVERYTHING?', cx, CH - 40, '#ff8a7a', { al: 'c', sh: '#000' }); txt('TAP HERE TO CONFIRM', cx, CH - 28, '#ff8a7a', { al: 'c', sh: '#000' }); }
     else if (Math.floor(T * 1.6) % 2 === 0) txt('TOUCH TO WALK UP', cx, CH - 32, '#ffd84a', { al: 'c', sh: '#000' });
-    if (SAVE && SAVE.day > 1 && !resetPrompt) txt('DAY ' + SAVE.day + (SAVE.completed ? ' · FOUNDER' : ''), cx, CH - 44, '#86a2de', { al: 'c', sh: '#000' });
+    if (SAVE && SAVE.day > 1 && !resetPrompt) txt('LOOP ' + SAVE.day + (SAVE.completed ? ' · FOUNDER' : ''), cx, CH - 44, '#86a2de', { al: 'c', sh: '#000' });
     if (!LS.on && !resetPrompt && 'ontouchend' in document) txt('TURN SIDEWAYS FOR THE WIDE VIEW', cx, CH - 20, '#6a7088', { al: 'c' });
     txt('V' + VERSION, 4, CH - 10, '#7a8090'); txt('S77FFY', CW - 4, CH - 10, '#7a8090', { al: 'r' });
   }
@@ -2199,7 +2207,6 @@ function drawKeys() {
     const label = k.k === 'BL' || k.k === 'BR' ? '' : k.k;
     const lc = isF ? (k.k === 'CLEAR' ? '#3a2a00' : '#ffffff') : k.k === 'HELP' ? '#dfe8ff' : '#1d2228';
     if (label) txt(label, Math.round(mx), my, lc, { al: 'c' });
-    if (k.k === '5') rect(Math.round(mx) + 3, my, 1, 1, '#555');
     if (k.k === 'BL' && S && hasDot() && PH === 'play') { const bl = Math.floor(T * 2) % 2; rect(Math.round(mx) - 1, my + 3, 2, 2, bl ? '#ffd84a' : '#c8a020'); }
   }
 }
@@ -2300,7 +2307,7 @@ function walletLayout() {
   const y = 22 + LS.rows * 26 + 20;
   return { act: { look: { x: 6, y, w: 72, h: 14 }, tear: { x: 6, y: y + 17, w: 72, h: 14 }, close: { x: 6, y: y + 34, w: 72, h: 14 } },
     tile: i => ({ x: 9 + (i % 2) * 37, y: 20 + Math.floor(i / 2) * 26, w: 32, h: 22 }),
-    pager: { prev: { x: 46, y: CH - 28, w: 15, h: 16 }, next: { x: 64, y: CH - 28, w: 15, h: 16 } }, per: LS.rows * 2 };
+    pager: { prev: { x: 46, y: CH - 50, w: 15, h: 16 }, next: { x: 64, y: CH - 50, w: 15, h: 16 } }, per: LS.rows * 2 };
 }
 function panelAlpha() {
   if (PH === 'title' || PH === 'daycard' || !S) return 0;
@@ -2308,17 +2315,25 @@ function panelAlpha() {
   if (PH === 'ending') return clamp(1 - PHT / 1.2, 0, 1);
   return 1;
 }
+const WATCH_W = 58, WATCH_H = 30;
 function drawWatch(x, y) {
-  rect(x + 2, y + 2, 34, 24, '#16181c'); rect(x, y, 38, 24, '#8d969f'); rect(x + 1, y + 1, 36, 22, '#c3cad1'); rect(x + 3, y + 3, 32, 18, '#9fb58a'); rect(x + 3, y + 3, 32, 1, '#7d9468');
-  const wt = S.era !== 2026 ? String(S.era) : clockStr(); txt(wt, x + 5, y + 5, '#1b2a14'); if (Math.floor(T) % 2) rect(x + 15, y + 6, 1, 1, '#9fb58a');
-  const cash = walletCash(); let cs = cash < 10000 ? fmt(cash) : '£' + Math.floor(cash / 100); if (cs.length > 6) cs = '£' + (cash >= 1e8 ? Math.floor(cash / 1e8) + 'M' : Math.floor(cash / 1e5) + 'K'); txt(cs, x + 5, y + 14, '#1b2a14');
+  // a big digital watch: the time first, your cash underneath. It beeps and flashes as midnight comes.
+  const now = S.era === 2026, m = now ? Math.floor(S.dayMs / DAY_MS * 60) : 0, late = now && m >= 55 && PH === 'play';
+  const flash = PH === 'play' && ((T - S.watchFlash < 3) || (now && m >= 59)) && Math.floor(T * 4) % 2;
+  rect(x + 16, y - 3, 26, 3, '#26262c'); rect(x + 16, y + WATCH_H, 26, 3, '#26262c');
+  rect(x + 2, y + 2, WATCH_W - 2, WATCH_H, '#16181c'); rect(x, y, WATCH_W, WATCH_H, '#8d969f'); rect(x + 1, y + 1, WATCH_W - 2, WATCH_H - 2, '#c3cad1');
+  const lcd = flash ? '#eaf8b8' : late ? '#d9b46a' : '#9fb58a', ink = late ? '#3a1408' : '#1b2a14';
+  rect(x + 3, y + 3, WATCH_W - 6, WATCH_H - 6, lcd); rect(x + 3, y + 3, WATCH_W - 6, 1, flash ? '#c8e090' : late ? '#b8904a' : '#7d9468');
+  const wt = now ? clockStr() : String(S.era); txt(wt, x + 5, y + 5, ink, { sc: 2 });
+  if (now && Math.floor(T) % 2) rect(x + 26, y + 5, 6, 12, lcd);   // the colon blinks
+  const cash = walletCash(); let cs = cash < 10000 ? fmt(cash) : '£' + Math.floor(cash / 100); if (cs.length > 9) cs = '£' + (cash >= 1e8 ? Math.floor(cash / 1e8) + 'M' : Math.floor(cash / 1e5) + 'K'); txt(cs, x + 5, y + 19, ink);
 }
 function drawWalletPanel() {
   const a = panelAlpha(); if (a <= 0) return; ctx.globalAlpha = a;
   const L = walletLayout(), pw = LS.mx;
   rect(0, 0, pw, CH, '#3e2210'); rect(2, 2, pw - 4, CH - 4, '#6b4024'); rect(5, 5, pw - 10, CH - 10, '#7c4a2a');
   for (let y = 9; y < CH - 8; y += 4) { rect(4, y, 1, 2, '#a0683c'); rect(pw - 5, y, 1, 2, '#a0683c'); }
-  txt('WALLET', 50, 8, '#ffd8a0', { al: 'c' });
+  txt('WALLET', 57, 8, '#ffd8a0', { al: 'c' });
   const tl = tiles(); const pages = Math.max(1, Math.ceil(tl.length / L.per)); S.page = clamp(S.page, 0, pages - 1);
   for (let i = 0; i < L.per; i++) {
     const t = tl[S.page * L.per + i]; const r = L.tile(i);
@@ -2335,8 +2350,8 @@ function drawWalletPanel() {
       txt(lbl, r.x + r.w / 2, r.y + 4, '#ffe0b0', { al: 'c' });
     }
   }
-  if (pages > 1) { const P = L.pager; txt('<', P.prev.x + 5, P.prev.y + 5, '#ffd8a0'); txt('>', P.next.x + 5, P.next.y + 5, '#ffd8a0'); txt((S.page + 1) + '/' + pages, 62, CH - 38, '#ffd8a0', { al: 'c' }); }
-  drawWatch(4, CH - 30);
+  if (pages > 1) { const P = L.pager; txt('<', P.prev.x + 5, P.prev.y + 5, '#ffd8a0'); txt('>', P.next.x + 5, P.next.y + 5, '#ffd8a0'); txt((S.page + 1) + '/' + pages, 62, CH - 58, '#ffd8a0', { al: 'c' }); }
+  drawWatch(Math.round((LS.mx - WATCH_W) / 2), CH - 33);
   ctx.globalAlpha = 1;
 }
 function exOff() { const pw = CW - LS.rp; return { x: LS.rp - 16 + Math.max(0, Math.floor((pw - 222) / 2)), y: 14 - 196 }; }
@@ -2388,7 +2403,7 @@ function drawHands() {
   if (pages > 1) { txt('<', PAGER.prev.x + 7, PAGER.prev.y + 3, '#ffd8a0'); txt((S.page + 1) + '/' + pages, 181, 384, '#ffd8a0', { al: 'c' }); txt('>', PAGER.next.x + 7, PAGER.next.y + 3, '#ffd8a0'); }
   drawHand(-1); drawHand(1);
   // watch
-  drawWatch(2, 381);
+  drawWatch(2, 382);
   // action bar
   if (S.sel && PH === 'play') {
     const h = heldItem();
@@ -2673,11 +2688,26 @@ function drawFigure() {
   ctx.globalAlpha = alpha * 0.55; ellipse(Math.round(x), Math.round(F - 2), Math.round(w * 0.36), Math.max(2, Math.round(sc * 2.2)), '#000'); 
   ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(FIG[frame], Math.round(x - w / 2), Math.round(F - h - bob * sc * 0.6), w, h); ctx.globalAlpha = 1;
 }
+function dayCardLen() { return SAVE.completed ? 2.6 : (SAVE.visited1967 || SAVE.decimal71) ? 4.4 : 3.2; }
 function drawDayCard() {
-  rect(0, 0, CW, CH, '#000'); const cx = Math.round(CW / 2), cy = Math.round(CH / 2);
-  const a = clamp(PHT / 0.6, 0, 1) * clamp((2.6 - PHT) / 0.5, 0, 1);
-  ctx.globalAlpha = a; txt('DAY ' + SAVE.day, cx, cy - 28, '#ffd84a', { al: 'c', sc: 3 }); txt('23:00', cx, cy + 2, '#86a2de', { al: 'c', sc: 2 });
-  if (SAVE.day > 1) txt(SAVE.completed ? 'THE LOOP CONTINUES' : 'EVERYTHING IS AS IT WAS', cx, cy + 28, '#8a8a9a', { al: 'c' });
+  rect(0, 0, CW, CH, '#000'); const cx = Math.round(CW / 2), cy = Math.round(CH / 2) - 10;
+  const L = dayCardLen(), a = clamp(PHT / 0.6, 0, 1) * clamp((L - PHT) / 0.5, 0, 1);
+  ctx.globalAlpha = a; txt('LOOP ' + SAVE.day, cx, cy - 34, '#ffd84a', { al: 'c', sc: 3 }); txt('23:00', cx, cy - 4, '#86a2de', { al: 'c', sc: 2 });
+  if (SAVE.completed) txt("AGAIN, FOR OLD TIMES' SAKE", cx, cy + 22, '#8a8a9a', { al: 'c' });
+  else {
+    txt('YOU REMEMBER. NOTHING ELSE DOES.', cx, cy + 22, '#cbbfb0', { al: 'c' });
+    const past = []; if (SAVE.visited1967) past.push('1967 · ACCOUNT 0042 OPENED'); if (SAVE.decimal71) past.push('1971 · A DECIMAL POINT FITTED');
+    if (past.length) { ctx.globalAlpha = a * clamp((PHT - 1.1) / 0.5, 0, 1); txt('EXCEPT THE PAST. IT STAYS DONE:', cx, cy + 40, '#86a2de', { al: 'c' }); past.forEach((l, i) => txt(l, cx, cy + 52 + i * 10, '#ffd84a', { al: 'c' })); }
+  }
+  ctx.globalAlpha = 1;
+}
+function drawIntroCaption() {
+  // the first walk-up of all: what time it is, and how long you've got
+  if (SAVE.day > 1 || SAVE.completed) return;
+  const L = introLen(), a = clamp((PHT - 0.9) / 0.5, 0, 1) * clamp((L - 0.9 - PHT) / 0.5, 0, 1); if (a <= 0) return;
+  ctx.globalAlpha = a; const cx = Math.round(CW / 2);
+  const g = ctx.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, 'rgba(6,4,10,0.85)'); g.addColorStop(1, 'rgba(6,4,10,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, CW, 64);
+  txt('23:00', cx, 14, '#ffd84a', { al: 'c', sc: 2, sh: '#5a2a08' }); txt('YOU HAVE UNTIL MIDNIGHT.', cx, 34, '#eef3ff', { al: 'c', sh: '#000' });
   ctx.globalAlpha = 1;
 }
 function drawMidnight() {
@@ -2689,17 +2719,18 @@ function drawEndCard() {
   ctx.save(); ctx.translate(Math.round(CW / 2) - 120, CH - 416);
   rect(14, 286, 212, 122, 'rgba(8,6,12,0.92)'); frame(14, 286, 212, 122, '#c8a040');
   txt('HOLE IN THE WALL', 120, 294, '#ffd84a', { al: 'c', sc: 2 });
-  txt('THIS IS NOT A GAME', 120, 310, '#eef3ff', { al: 'c' });
+  txt('A CASH TIME MACHINE GAME', 120, 310, '#eef3ff', { al: 'c' });
   const c = SAVE.completed || { day: SAVE.day, ms: SAVE.totalMs };
   txt('ENDING: PERPETUAL', 120, 324, '#c080ff', { al: 'c' });
-  txt('DAYS ' + c.day + ' · ' + Math.max(1, Math.round(c.ms / 60000)) + ' MINUTES OF YOUR TIME', 120, 336, '#cbbfb0', { al: 'c' });
+  txt('LOOPS ' + c.day + ' · ' + Math.max(1, Math.round(c.ms / 60000)) + ' MINUTES OF YOUR TIME', 120, 336, '#cbbfb0', { al: 'c' });
   txt('CODE ' + endCode(), 120, 350, '#ffd84a', { al: 'c' });
   const e = SAVE.endings; txt('ENDINGS FOUND ' + ['perpetual', 'paradox', 'greed'].filter(k => e[k]).length + ' / 3', 120, 364, '#86a2de', { al: 'c' });
-  if (PHT > 10 && Math.floor(T * 1.6) % 2) txt('TOUCH TO WALK UP AGAIN', 120, 384, '#ffffff', { al: 'c' });
+  txt('00:01 · TOMORROW, AT LAST', 120, 374, '#cbbfb0', { al: 'c' });
+  if (PHT > 10 && Math.floor(T * 1.6) % 2) txt('TOUCH TO WALK UP AGAIN', 120, 386, '#ffffff', { al: 'c' });
   txt('V' + VERSION + ' · S77FFY', 120, 398, '#5a5a6a', { al: 'c' });
   ctx.restore(); ctx.globalAlpha = 1;
 }
-function endCode() { const c = SAVE.completed || { day: SAVE.day, ms: SAVE.totalMs }; const m = Math.max(1, Math.round(c.ms / 60000)); return 'HITW-1887-' + (SAVE.initials || 'ANO') + '-D' + c.day + '-' + m + 'M'; }
+function endCode() { const c = SAVE.completed || { day: SAVE.day, ms: SAVE.totalMs }; const m = Math.max(1, Math.round(c.ms / 60000)); return 'HITW-1887-' + (SAVE.initials || 'ANO') + '-L' + c.day + '-' + m + 'M'; }
 function drawGlitch() {
   const g = S.glitch; for (let i = 0; i < 18 * g; i++) { const y = Math.floor(Math.random() * 278); const h = 1 + Math.floor(Math.random() * 4); const dx = Math.round((Math.random() - 0.5) * 20 * g); ctx.drawImage(cv, 0, y, CW, h, dx, y, CW, h); }
   if (Math.random() < g * 0.3) { ctx.fillStyle = 'rgba(255,255,255,' + (0.2 * g).toFixed(2) + ')'; ctx.fillRect(0, 0, CW, 278); }
@@ -2714,7 +2745,7 @@ function drawTravelFx() {
 function setLayout(w, h) {
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   ctx.imageSmoothingEnabled = false; CW = w; CH = h; LS.on = w > h;
-  if (LS.on) { LS.mx = 84; LS.rp = 84 + W; LS.rows = Math.max(4, Math.floor((h - 128) / 26)); } else { LS.mx = 0; LS.rp = W; LS.rows = 0; }
+  if (LS.on) { LS.mx = 84; LS.rp = 84 + W; LS.rows = Math.max(4, Math.floor((h - 152) / 26)); } else { LS.mx = 0; LS.rp = W; LS.rows = 0; }
   RECT.leave.x = CW - 17;
 }
 // If the page itself turns (rotation lock off, in a browser), the viewport goes wide and we follow it.
