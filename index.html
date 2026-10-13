@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#120a0c">
 <meta name="app-repo" content="hole-in-the-wall">
-<meta name="app-version" content="1.0.16">
+<meta name="app-version" content="1.0.18">
 <title>HOLE IN THE WALL</title>
 <style>
 html,body{margin:0;height:100%;background:#120a0c;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -23,7 +23,7 @@ canvas{display:block;flex:none;image-rendering:pixelated;image-rendering:crisp-e
    HOLE IN THE WALL  ·  A CASH TIME MACHINE GAME
    A single-file, zero-dependency ARG about a cash machine.
    ===================================================================== */
-const VERSION = '1.0.16';
+const VERSION = '1.0.18';
 const W = 240, H = 416;
 const DAY_MS = 20 * 60 * 1000;
 const WARN = [[30, '23:30 · HALF AN HOUR TO MIDNIGHT'], [45, '23:45 · FIFTEEN MINUTES TO MIDNIGHT'], [50, '23:50 · TEN MINUTES TILL IT ALL RESETS'], [55, '23:55 · FIVE MINUTES LEFT IN THIS LOOP'], [59, '23:59 · ONE MINUTE']];            // 23:00 -> 00:00 in 20 real minutes
@@ -424,7 +424,7 @@ function newDay() {
     looseBrick: !!SAVE.visited1967, brickOut: false, brickT: 0, sketch: false, removed: {}, removedT: {}, portal: false, portalT: 0, portalYear: 0,
     vanish: {}, timers: [], press: {}, lit: {}, hold: {}, glassN: 0, blankN: 0, helpN: {}, clockSynced: false, pinTries: {},
     pong: null, simon: null, say: null, travel: null, gearSpin: 0, retained: [], flapOpen: false, chatI: 0,
-    hg: { id: null, i: 0, t: 0, sig: '' }, pend: [], lastRcpt: [], warned: {}, watchFlash: -9, lastTick: -1, bubble: null, taunt: null, lastInput: 0, collectT: 0, collectN: 0, kept: [], tauntUsed: {},
+    hg: { id: null, i: 0, t: 0, sig: '' }, ghostEng: !!SAVE.engIn, pend: [], lastRcpt: [], warned: {}, watchFlash: -9, lastTick: -1, bubble: null, taunt: null, lastInput: 0, collectT: 0, collectN: 0, kept: [], tauntUsed: {},
     decimalOK: !!SAVE.decimal71, rng: mulberry((Date.now() ^ (SAVE.day * 7919)) >>> 0), usedMsgs: {}, clockStop: false, wobble: 0, glitch: 0, signFlash: 0,
   };
   S.wallet = startWallet();
@@ -1013,7 +1013,7 @@ def('topupsent', {
   update(s) {
     if (s.t > 1.6 && !s.sent) { s.sent = true; sms("PERCY: TA FOR THE CREDIT!! YOU'RE GOLD NOW SO YOU'RE BASICALLY STAFF. SENDING YOU JTG'S OLD CARD. HE NEVER CAME BACK AFTER HIS LAST VISIT. THE CODE IS THE DAY HE LAST CAME. X"); }
     if (s.t > 4.2) {
-      if (!S.flags.eng) { S.flags.eng = true; reach(7); finish({ cards: [mkCard('engineer')], msg: ['PERCY HAS SENT YOU', 'SOMETHING.'] }); }
+      if (!S.flags.eng) { S.flags.eng = true; S.ghostEng = false; reach(7); finish({ cards: [mkCard('engineer')], msg: ['PERCY HAS SENT YOU', 'SOMETHING.'] }); }
       else go('menu');
     }
   },
@@ -1539,6 +1539,11 @@ def('paradox', {
 function insertCard(it) {
   if (S.era !== 2026) { SFX.err(); flash('I DON\'T TAKE CARDS. NOT YET.'); say('THE SLOT WON\'T TAKE IT.'); return; }
   if (S.out.card) { say('TAKE THE CARD THAT\'S OUT FIRST.'); return; }
+  if (S.ghostEng && SCR.name === 'idle') {
+    // JTG's card was left in the machine when the last loop ended. It's still in there.
+    // pushing your card in shoves it back out: take it, then put it back in to use it
+    S.ghostEng = false; S.flags.eng = true; const ec = mkCard('engineer'); ec.fresh = true; SFX.err(); say("IT WON'T GO IN. SOMETHING'S ALREADY IN THE SLOT."); after(0.6, () => ejectCard(ec)); return;
+  }
   if (S.cardIn) { SFX.err(); say('ONE CARD AT A TIME. PRESS RETURN CARD FIRST.'); return; }
   if (SCR.name !== 'idle') { SFX.err(); say('THE SLOT IS BUSY. GIVE PERCY A MOMENT.'); return; }
   removeWallet(it); S.cardIn = it; S.sel = null; SFX.cardIn(); go('reading');
@@ -1739,6 +1744,8 @@ function goalNow() {
   if (S.stage >= 16 || ['act5', 'ask', 'choice', 'sendpin', 'wdall', 'buytime'].includes(SCR.name)) return 'act5';
   if (S.portal) { if (!S.portalYear) return 'year'; if (!hasItem(i => i.kind === 'coin')) return null; return S.decimalOK ? 'sovereign' : 'decimal'; }
   const ret = c => S.retained.some(i => i.card === c) && !hasItem(i => i.card === c);
+  if (S.stage < 8 && SCR.name === 'engcode') return 'eng';   // e.g. JTG's card turned up in the slot
+  if (S.stage < 8) {
   if (S.stage < 1) return ret('debit') ? 'retained' : 'pin1';
   if (!S.flags.loyalty) return 'loyal';
   if (S.stage < 3) return ret('member') ? 'retained' : 'pin2';
@@ -1746,6 +1753,7 @@ function goalNow() {
   if (S.stage < 6) return ret('gold') ? 'retained' : 'pin3';
   if (!S.flags.eng) return 'topup';
   if (S.stage < 8) return 'eng';
+  }
   if (!S.hatch) return 'selftest';
   if (!SAVE.visited1967) {
     if (!hasItem(i => i.era === 1967)) { if (S.cass4 === 'locked') return 'cass4'; if (S.cass4 === 'jammed') return 'calib'; if (S.bin.some(n => n.era === 1967)) return 'bin'; return null; }
@@ -1994,8 +2002,10 @@ function cardAnim(e) {
 let introFromTitle = false;
 function startGame(fromTitle) { introFromTitle = !!fromTitle; PH = 'intro'; PHT = 0; newDay(); SAVE.playing = true; persist(); SFX.jingle(); }
 function introLen() { return SAVE.day <= 1 ? 6.0 : 4.2; }
+function engLeftIn() { return !!(S && (S.ghostEng || (S.cardIn && S.cardIn.card === 'engineer') || S.retained.some(c => c && c.card === 'engineer'))); }
 function startMidnight(kind) {
   if (PH !== 'play') return;
+  SAVE.engIn = engLeftIn();
   PH = 'midnight'; PHT = 0; S.midKind = kind; S.exam = null; S.sel = null; SAVE.playing = false;
   if (kind !== 'leave') SFX.bell(); else SFX.step();
 }
@@ -2920,7 +2930,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { persist(); if (PH === 'play') document.title = S && S.stage >= 8 ? 'COME BACK BEFORE MIDNIGHT' : 'PERCY MISSES YOU'; }
   else { document.title = 'HOLE IN THE WALL'; lastT = performance.now(); }
 });
-setInterval(() => { if (PH === 'play') persist(); }, 5000);
+setInterval(() => { if (PH === 'play') { SAVE.engIn = engLeftIn(); persist(); } }, 5000);
 console.log('PERPETUAL BUILDING SOCIETY · EST 1887 · Hello, engineer. Percy says: look up.');
 
 /* ---------------- autopilot (dev skip + test harness) ---------------- */
@@ -2950,6 +2960,8 @@ function waitFor(fn, label, max) { let t = 0; max = max || 60000; while (!fn()) 
 function scr(n) { return () => SCR && SCR.name === n && PH === 'play'; }
 function* ROUTE() {
   const key = k => ['key', k]; const btn = id => ['btn', id];
+  // JTG's card left in the slot last loop: find it, take it, carry on
+  if (S.ghostEng) { yield ['sel', PRED.card('debit')]; yield ['tap', RECT.cardSlot]; yield ['pause', 700]; yield ['collect']; }
   // Act I
   yield ['sel', PRED.card('debit')]; yield ['tap', RECT.cardSlot]; yield ['wait', 'pin'];
   for (const k of '1887') yield key(k); yield key('ENTER'); yield ['wait', 'menu'];
@@ -2974,10 +2986,12 @@ function* ROUTE() {
   yield ['sel', PRED.note('n500')]; yield ['act', 'tear'];
   yield btn('R2'); yield ['wait', 'deposit']; yield ['depall']; yield ['sel', PRED.note('n500h')]; yield ['tap', RECT.deposit]; yield key('ENTER');
   yield ['wait', 'pong']; yield ['pong']; yield ['wait', 'pongend']; yield btn('R3'); yield ['wait', 'hiscore']; yield btn('R3'); yield ['wait', 'goldaward']; yield ['collect'];
-  yield ['sel', PRED.card('gold')]; yield ['tap', RECT.cardSlot]; yield ['wait', 'pin'];
-  for (const k of '1967') yield key(k); yield key('ENTER'); yield ['wait', 'menu'];
-  yield btn('L3'); yield ['wait', 'more']; yield btn('L0'); yield ['wait', 'topup'];
-  for (const k of PHONE) yield key(k); yield key('ENTER'); yield ['wait', 'topupamt']; yield btn('L0'); yield ['wait', 'topupsent']; yield ['sms']; yield ['collect'];
+  if (!S.flags.eng) {
+    yield ['sel', PRED.card('gold')]; yield ['tap', RECT.cardSlot]; yield ['wait', 'pin'];
+    for (const k of '1967') yield key(k); yield key('ENTER'); yield ['wait', 'menu'];
+    yield btn('L3'); yield ['wait', 'more']; yield btn('L0'); yield ['wait', 'topup'];
+    for (const k of PHONE) yield key(k); yield key('ENTER'); yield ['wait', 'topupamt']; yield btn('L0'); yield ['wait', 'topupsent']; yield ['sms']; yield ['collect'];
+  }
   // Act III
   yield ['sel', PRED.card('engineer')]; yield ['tap', RECT.cardSlot]; yield ['wait', 'engcode'];
   for (const k of '091087') yield key(k); yield key('ENTER'); yield ['wait', 'service'];
