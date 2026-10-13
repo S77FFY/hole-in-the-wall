@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#120a0c">
 <meta name="app-repo" content="hole-in-the-wall">
-<meta name="app-version" content="1.0.14">
+<meta name="app-version" content="1.0.16">
 <title>HOLE IN THE WALL</title>
 <style>
 html,body{margin:0;height:100%;background:#120a0c;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -23,7 +23,7 @@ canvas{display:block;flex:none;image-rendering:pixelated;image-rendering:crisp-e
    HOLE IN THE WALL  ·  A CASH TIME MACHINE GAME
    A single-file, zero-dependency ARG about a cash machine.
    ===================================================================== */
-const VERSION = '1.0.14';
+const VERSION = '1.0.16';
 const W = 240, H = 416;
 const DAY_MS = 20 * 60 * 1000;
 const WARN = [[30, '23:30 · HALF AN HOUR TO MIDNIGHT'], [45, '23:45 · FIFTEEN MINUTES TO MIDNIGHT'], [50, '23:50 · TEN MINUTES TILL IT ALL RESETS'], [55, '23:55 · FIVE MINUTES LEFT IN THIS LOOP'], [59, '23:59 · ONE MINUTE']];            // 23:00 -> 00:00 in 20 real minutes
@@ -628,7 +628,7 @@ def('rview', {
     Ct(0, r.title, th.hi);
     L.slice(s.top, s.top + rows).forEach((l, i) => txt(l, 56, ly(1 + i), th.fg));
     Ct(9, 'COPY PRINTS WITH CARD', th.dim);
-    Lt(10, L.length > rows ? '2 / 8 SCROLL' : '', th.dim); Rt(10, 'ENTER OK', th.hi);
+    Lt(10, L.length > rows ? '2▲  8▼' : '', th.dim); Rt(10, 'ENTER OK', th.hi);
   },
   key(s, k) {
     const n = Math.max(0, s.p.r.lines.length - 8);
@@ -2620,11 +2620,11 @@ function drawNoteBig(n, uv) {
   if (n.half) txt(n.half === 'L' ? 'LEFT HALF' : 'RIGHT HALF', 120, 340, '#cbbfb0', { al: 'c' });
 }
 const CARDTXT = {
-  debit: [['PERPETUAL', 'BUILDING SOCIETY', '', '0042 0001', 'A N OTHER', 'DEBIT'], ['', 'A N OTHER', '', 'IF FOUND, RETURN TO', 'THE WALL.']],
-  member: [['PERPETUAL', 'MEMBER', '', 'NO. 0042', 'A N OTHER', ''], ['', 'A N OTHER', '', 'PIN: WHAT YOU GAVE ME,', 'IN THE ORDER YOU GAVE IT.', '- P']],
-  gold: [['PERPETUAL GOLD', 'PRIVILEGE', '', 'NO. 0042', 'A N OTHER', ''], ['', 'A N OTHER', '', "PIN: PERCY'S BEST.", '']],
+  debit: [['PERPETUAL', 'BUILDING SOCIETY', '', '4927 0042 3685 0001', 'A N OTHER', 'DEBIT'], ['', 'A N OTHER', '', 'IF FOUND, RETURN TO', 'THE WALL.']],
+  member: [['PERPETUAL', 'MEMBER', '', '4927 0042 3685 0002', 'A N OTHER', ''], ['', 'A N OTHER', '', 'PIN: WHAT YOU GAVE ME,', 'IN THE ORDER YOU GAVE IT.', '- P']],
+  gold: [['PERPETUAL GOLD', 'PRIVILEGE', '', '4927 0042 3685 0003', 'A N OTHER', ''], ['', 'A N OTHER', '', "PIN: PERCY'S BEST.", '']],
   engineer: [['PERPETUAL ATM SERVICES', 'FIELD ENGINEER', '', 'J.T.G.', 'ID 0987', ''], ['', 'J.T.G.', '', 'CODE: 6 DIGITS.', 'DATE OF LAST VISIT', '(DDMMYY)']],
-  founder: [['PERPETUAL', 'FOUNDER', '', 'NO. 0001', 'EST. 1887', ''], ['', '', '', 'SEE YOU YESTERDAY.', '']],
+  founder: [['PERPETUAL', 'FOUNDER', '', '4927 0001 0000 0001', 'EST. 1887', ''], ['', '', '', 'SEE YOU YESTERDAY.', '']],
 };
 function drawCardBig(it, face, uv) {
   const x = 36, y = 228, w = 168, h = 106; const c = it.card;
@@ -2636,7 +2636,9 @@ function drawCardBig(it, face, uv) {
   if (face === 0) {
     txt(L[0], x + 8, y + 8, tc, { sc: c === 'engineer' ? 1 : 2 }); txt(L[1], x + 8, y + (c === 'engineer' ? 18 : 24), tc);
     rect(x + 10, y + 40, 22, 16, '#e6d070'); frame(x + 10, y + 40, 22, 16, '#a08830'); rect(x + 20, y + 40, 1, 16, '#a08830'); rect(x + 10, y + 47, 22, 1, '#a08830');
-    txt(L[3], x + 8, y + 68, tc, { sc: 2 }); txt(L[4], x + 8, y + 88, tc);
+    if (/^\d{4} \d{4} \d{4} \d{4}$/.test(L[3])) { let xx = x + 8; for (const ch of L[3]) { if (ch === ' ') { xx += 3; continue; } txt(ch, xx, y + 68, tc, { sc: 2 }); xx += 9; } }
+    else txt(L[3], x + 8, y + 68, tc, { sc: 2 });
+    txt(L[4], x + 8, y + 88, tc);
     if (L[5]) txt(L[5], x + w - 8, y + 88, tc, { al: 'r' });
   } else {
     rect(x, y + 12, w, 16, '#111');
