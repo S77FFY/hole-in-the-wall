@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#120a0c">
 <meta name="app-repo" content="hole-in-the-wall">
-<meta name="app-version" content="1.0.13">
+<meta name="app-version" content="1.0.14">
 <title>HOLE IN THE WALL</title>
 <style>
 html,body{margin:0;height:100%;background:#120a0c;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -23,7 +23,7 @@ canvas{display:block;flex:none;image-rendering:pixelated;image-rendering:crisp-e
    HOLE IN THE WALL  ·  A CASH TIME MACHINE GAME
    A single-file, zero-dependency ARG about a cash machine.
    ===================================================================== */
-const VERSION = '1.0.13';
+const VERSION = '1.0.14';
 const W = 240, H = 416;
 const DAY_MS = 20 * 60 * 1000;
 const WARN = [[30, '23:30 · HALF AN HOUR TO MIDNIGHT'], [45, '23:45 · FIFTEEN MINUTES TO MIDNIGHT'], [50, '23:50 · TEN MINUTES TILL IT ALL RESETS'], [55, '23:55 · FIVE MINUTES LEFT IN THIS LOOP'], [59, '23:59 · ONE MINUTE']];            // 23:00 -> 00:00 in 20 real minutes
@@ -107,6 +107,10 @@ function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
 function frame(x, y, w, h, c) { rect(x, y, w, 1, c); rect(x, y + h - 1, w, 1, c); rect(x, y, 1, h, c); rect(x + w - 1, y, 1, h, c); }
 function bevel(x, y, w, h, base, hi, lo) { rect(x, y, w, h, base); rect(x, y, w, 1, hi); rect(x, y, 1, h, hi); rect(x, y + h - 1, w, 1, lo); rect(x + w - 1, y, 1, h, lo); }
 function rrect(x, y, w, h, c) { rect(x + 1, y, w - 2, h, c); rect(x, y + 1, w, h - 2, c); }
+function rround(x, y, w, h, r, c) {   // a properly rounded rectangle, radius r
+  rect(x, y + r, w, h - 2 * r, c);
+  for (let j = 0; j < r; j++) { const d = r - j - 0.5, i = Math.round(r - Math.sqrt(Math.max(0, r * r - d * d))); rect(x + i, y + j, w - 2 * i, 1, c); rect(x + i, y + h - 1 - j, w - 2 * i, 1, c); }
+}
 function circ(cx, cy, r, c) { ctx.fillStyle = c; for (let y = -r; y <= r; y++) { const dx = Math.floor(Math.sqrt(r * r - y * y + r * 0.6)); ctx.fillRect(cx - dx, cy + y, dx * 2 + 1, 1); } }
 function ring(cx, cy, r, c) { ctx.fillStyle = c; for (let a = 0; a < 360; a += 3) { const t = a * Math.PI / 180; ctx.fillRect(Math.round(cx + Math.cos(t) * r), Math.round(cy + Math.sin(t) * r), 1, 1); } }
 function ellipse(cx, cy, rx, ry, c) { ctx.fillStyle = c; for (let y = -ry; y <= ry; y++) { const dx = Math.floor(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry)))); ctx.fillRect(cx - dx, cy + y, dx * 2 + 1, 1); } }
@@ -420,7 +424,7 @@ function newDay() {
     looseBrick: !!SAVE.visited1967, brickOut: false, brickT: 0, sketch: false, removed: {}, removedT: {}, portal: false, portalT: 0, portalYear: 0,
     vanish: {}, timers: [], press: {}, lit: {}, hold: {}, glassN: 0, blankN: 0, helpN: {}, clockSynced: false, pinTries: {},
     pong: null, simon: null, say: null, travel: null, gearSpin: 0, retained: [], flapOpen: false, chatI: 0,
-    hg: { id: null, i: 0, t: 0, sig: '' }, warned: {}, watchFlash: -9, lastTick: -1, bubble: null, taunt: null, lastInput: 0, collectT: 0, collectN: 0, kept: [], tauntUsed: {},
+    hg: { id: null, i: 0, t: 0, sig: '' }, pend: [], lastRcpt: [], warned: {}, watchFlash: -9, lastTick: -1, bubble: null, taunt: null, lastInput: 0, collectT: 0, collectN: 0, kept: [], tauntUsed: {},
     decimalOK: !!SAVE.decimal71, rng: mulberry((Date.now() ^ (SAVE.day * 7919)) >>> 0), usedMsgs: {}, clockStop: false, wobble: 0, glitch: 0, signFlash: 0,
   };
   S.wallet = startWallet();
@@ -522,6 +526,7 @@ function greet() {
 }
 def('idle', {
   enter(s) { S.flapOpen = false; },
+  opts() { return S.lastRcpt.length ? { R3: ['LAST RECEIPT', () => { if (S.out.receipt) { SFX.err(); flash('TAKE THE RECEIPT FIRST.'); return; } printReceipt(S.lastRcpt.shift()); }] } : {}; },
   draw(s) {
     Ct(0, 'PERPETUAL BUILDING SOC.', th.hi); Ct(1, '· CASHPOINT 0042 ·', th.dim);
     Ct(3, greet(), th.fg); Ct(5, 'PLEASE INSERT YOUR CARD', th.fg);
@@ -585,7 +590,7 @@ def('pin', {
   },
 });
 def('retained', {
-  enter(s) { S.retained.push(S.cardIn); S.cardIn = null; SFX.cardIn(); },
+  enter(s) { dropPend(); S.retained.push(S.cardIn); S.cardIn = null; SFX.cardIn(); },
   draw() { Ct(1, 'YOUR CARD HAS BEEN', th.bad); Ct(2, 'RETAINED.', th.bad); Ct(4, 'PLEASE CONTACT'); Ct(5, 'YOUR BRANCH.'); Ct(7, '(THERE IS NO BRANCH.)', th.dim); Ct(9, 'TRY AGAIN TOMORROW.', th.dim); },
   update(s) { if (s.t > 5) go('idle'); },
 });
@@ -608,12 +613,57 @@ def('menu', {
   key(s, k) { if (k === 'CANCEL') finish({}); else if (k === 'HELP') go('help'); else if (k === 'BL' || k === 'BR') blankKey(); },
 });
 /* ---- finish (return card, cash, receipt, new cards) ---- */
-function finish(p) { go('finish', p); }
+function finish(p) {
+  // before your card comes back: would you like a receipt?
+  if (S.cardIn && S.pend.length && !(p && p.asked)) { go('rask', { p: p || {} }); return; }
+  go('finish', p);
+}
+function queueReceipt(r) { S.pend = S.pend.filter(x => x.title !== r.title); S.pend.push(r); }
+function dropPend() { if (S.pend.length) { S.lastRcpt = S.pend.splice(0); } }   // card left without the question: keep them for a reprint
+def('rview', {
+  // a receipt shown on Percy's screen, a line at a time
+  enter(s) { s.top = 0; },
+  draw(s) {
+    const r = s.p.r, L = r.lines, rows = 8;
+    Ct(0, r.title, th.hi);
+    L.slice(s.top, s.top + rows).forEach((l, i) => txt(l, 56, ly(1 + i), th.fg));
+    Ct(9, 'COPY PRINTS WITH CARD', th.dim);
+    Lt(10, L.length > rows ? '2 / 8 SCROLL' : '', th.dim); Rt(10, 'ENTER OK', th.hi);
+  },
+  key(s, k) {
+    const n = Math.max(0, s.p.r.lines.length - 8);
+    if (k === '2') { s.top = Math.max(0, s.top - 3); SFX.soft(); }
+    else if (k === '8') { s.top = Math.min(n, s.top + 3); SFX.soft(); }
+    else if ((k === 'ENTER' || k === 'CANCEL') && s.t > 0.3) rvDone(s);
+  },
+  btn(s, id) {
+    const n = Math.max(0, s.p.r.lines.length - 8), r = +id[1];
+    if (r === 0) s.top = Math.max(0, s.top - 3); else if (r < 3) s.top = Math.min(n, s.top + 3); else if (s.t > 0.3) rvDone(s);
+  },
+});
+function rvDone(s) { if (s.p.then) s.p.then(); else go(s.p.next || 'menu'); }
+def('rask', {
+  opts(s) { return { L3: ['NO THANKS', () => rNo(s)], R3: ['YES, PRINT', () => rYes(s)] }; },
+  draw() {
+    Ct(1, 'WOULD YOU LIKE', th.hi); Ct(2, S.pend.length > 1 ? 'YOUR RECEIPTS?' : 'A RECEIPT?', th.hi);
+    S.pend.slice(0, 2).forEach((r, i) => Ct(4 + i * 2, r.title, th.fg));
+  },
+  key(s, k) { if (s.t < 0.3) return; if (k === 'ENTER') rYes(s); else if (k === 'CANCEL') rNo(s); },
+});
+def('rask2', {
+  // Percy jumps in
+  enter(s) { showBubble('say', "ARE YOU SURE YOU DON'T WANT IT? I PUT SOME OF MY BEST WORK ON THERE."); },
+  opts(s) { return { L3: ['NO, REALLY', () => { S.lastRcpt = S.pend.splice(0); SFX.soft(); go('finish', Object.assign({}, s.p.p, { asked: true })); }], R3: ['OK, PRINT IT', () => rYes(s)] }; },
+  draw() { Ct(1, 'ARE YOU SURE?', th.hi); Ct(3, "YOU DON'T WANT"); Ct(4, 'YOUR RECEIPT?'); Ct(6, '- PERCY', th.dim); },
+  key(s, k) { if (s.t < 0.3) return; if (k === 'ENTER') rYes(s); else if (k === 'CANCEL') { S.lastRcpt = S.pend.splice(0); go('finish', Object.assign({}, s.p.p, { asked: true })); } },
+});
+function rYes(s) { SFX.ok(); const p = Object.assign({}, s.p.p, { asked: true, receipts: (s.p.p.receipts || []).concat(S.pend.splice(0)) }); if (S.bubble && S.bubble.kind === 'say') S.bubble = null; go('finish', p); }
+function rNo(s) { SFX.soft(); go('rask2', { p: s.p.p }); }
 def('finish', {
   enter(s) {
     s.q = []; if (S.cardIn) s.q.push(['card']);
     if (s.p.cash && s.p.cash.length) s.q.push(['cash']);
-    if (s.p.receipt) s.q.push(['receipt']);
+    if (s.p.receipt) s.q.push(['receipt', s.p.receipt]); (s.p.receipts || []).forEach(r => s.q.push(['receipt', r]));
     (s.p.cards || []).forEach(c => s.q.push(['newcard', c]));
     s.q.push(['done']); fStep(s);
   },
@@ -638,8 +688,8 @@ function fStep(s) {
   s.cur = s.q.shift(); s.ct = s.t; const k = s.cur[0];
   if (k === 'card') { ejectCard(S.cardIn); S.cardIn = null; }
   else if (k === 'cash') dispense(s.p.cash);
-  else if (k === 'receipt') printReceipt(s.p.receipt);
-  else if (k === 'newcard') ejectCard(s.cur[1]);
+  else if (k === 'receipt') printReceipt(s.cur[1]);
+  else if (k === 'newcard') { s.cur[1].fresh = true; ejectCard(s.cur[1]); }
   else if (k === 'done') { /* nothing */ }
 }
 function ejectCard(it) { S.out.card = it; S.out.cardT = T; SFX.cardOut(); }
@@ -720,7 +770,8 @@ def('wdwait', {
         rowLR('DEPOSIT', '£10'), rowLR('BALANCE', '£10'), rowLR('DEPOSIT', '£20'), rowLR('BALANCE', '£30'),
         rowLR('WITHDRAW', '£50'), rowLR('LOYALTY', '+£20'), rowLR('BALANCE', fmt(S.bal)), '--------------------------',
         'WELCOME, MEMBER 0042.', 'YOUR MEMBERSHIP CARD', 'FOLLOWS THIS RECEIPT.', '', "MEMBERS' LADDER:", 'SAVE IT. ASK.', 'BRING IT BACK. ASK.', 'TAKE A HUNDRED.', '                       - P']));
-      finish({ cash: s.p.notes, receipt: r, cards: [mkCard('member')], msg: ['LOYALTY BONUS +£20', 'WELCOME, MEMBER!'] });
+      queueReceipt(r); const notes = s.p.notes;
+      go('rview', { r, then: () => finish({ cash: notes, cards: [mkCard('member')], msg: ['LOYALTY BONUS +£20', 'WELCOME, MEMBER!'] }) });
     } else if (s.p.ladder) finish({ cash: s.p.notes, msg: ["MEMBERS' LADDER", 'BONUS +£50'] });
     else finish({ cash: s.p.notes, msg: s.p.notes.some(n => n.special) ? ['I KEEP THE', 'INTERESTING ONES.'] : undefined });
   },
@@ -729,7 +780,7 @@ def('wdwait', {
 function canGold() { return S.bal >= 100000 && !S.flags.gold && S.cardIn && (S.cardIn.card === 'debit' || S.cardIn.card === 'member'); }
 def('balance', {
   enter(s) { S.tx.push('BAL'); s.pence = S.bal % 100 !== 0; s.gold = !s.pence && canGold(); },
-  opts(s) { return s.pence || s.gold ? {} : { R2: ['RECEIPT', () => { if (S.out.receipt) { SFX.err(); return; } printReceipt(mkPaper('receipt', 'BALANCE RECEIPT', receiptLines('TODAY ' + clockStr(), [rowLR('AVAILABLE BALANCE', fmt(S.bal)), rowLR('SAVINGS', fmt(S.sav))]))); }], R3: ['BACK', () => go('menu')] }; },
+  opts(s) { return s.pence || s.gold ? {} : { R2: ['RECEIPT', () => { queueReceipt(mkPaper('receipt', 'BALANCE RECEIPT', receiptLines('TODAY ' + clockStr(), [rowLR('AVAILABLE BALANCE', fmt(S.bal)), rowLR('SAVINGS', fmt(S.sav))]))); s.rq = true; SFX.ok(); }], R3: ['BACK', () => go('menu')] }; },
   update(s) { if (s.pence && s.t > 1.8) go('pongintro'); else if (s.gold && s.t > 2.2) go('goldaward'); },
   draw(s) {
     Ct(0, 'AVAILABLE BALANCE', th.hi);
@@ -737,6 +788,7 @@ def('balance', {
     if (S.cardIn.card !== 'debit') Lt(6, 'SAVINGS ' + fmt(S.sav), th.dim);
     if (s.gold) { Ct(7, 'YOU QUALIFY FOR', th.hi); Ct(8, 'PERPETUAL GOLD!', th.hi); }
     if (s.pence && s.t > 0.8) Ct(8, 'WHAT IS THAT?', th.bad);
+    if (s.rq) Ct(9, 'PRINTS WITH YOUR CARD', th.dim);
   },
   key(s, k) { if (k === 'CANCEL' && !s.pence && !s.gold) go('menu'); },
 });
@@ -923,9 +975,7 @@ function statementLines() {
     'INTEREST NEEDS YEARS.', 'AN HOUR EARNS NOTHING.', '', 'THE FIRST DEPOSIT WAS', 'MADE BY A STRANGER. WE', 'NEVER SAW THEIR FACE.'];
 }
 function doStatement() {
-  if (S.out.receipt) { SFX.err(); msg(['PLEASE TAKE YOUR', 'RECEIPT FIRST'], 'menu'); return; }
-  printReceipt(mkPaper('statement', 'MINI STATEMENT', statementLines()));
-  msg(['PRINTING YOUR', 'MINI STATEMENT'], 'menu', { dur: 1.4 });
+  const r = mkPaper('statement', 'MINI STATEMENT', statementLines()); queueReceipt(r); SFX.ok(); go('rview', { r, next: 'menu' });
 }
 def('savings', {
   opts() { return { L0: ['TO CURRENT', () => { S.bal += S.sav; S.sav = 0; S.tx.push('CUR'); SFX.ok(); }], L1: ['TO SAVINGS', () => { S.sav += S.bal; S.bal = 0; S.tx.push('SAV'); SFX.ok(); }], R3: ['BACK', () => go('menu')] }; },
@@ -970,7 +1020,7 @@ def('topupsent', {
 });
 function sms(text) { S.sms = { t: T, text, open: false }; SFX.sms(); }
 def('charity', {
-  opts() { return { L0: ['DONATE £10', () => { if (S.bal < 1000) { SFX.err(); msg(['INSUFFICIENT FUNDS'], 'more'); return; } if (S.out.receipt) { SFX.err(); msg(['PLEASE TAKE YOUR', 'RECEIPT FIRST'], 'more'); return; } S.bal -= 1000; const h = HINTS[Math.min(hintIndex(), HINTS.length - 1)]; printReceipt(mkPaper('receipt', 'CHARITY RECEIPT', ['SOCIETY FOR LONELY', 'MACHINES', '--------------------------', rowLR('DONATION', '£10'), '--------------------------', 'THANK YOU. A LITTLE', 'SOMETHING IN RETURN:', ''].concat(wrap(h[0], 26), [''], wrap(h[1], 26)))); msg(['THANK YOU.', '', 'PERCY HAS PRINTED', 'YOU A LITTLE', 'SOMETHING.'], 'more'); }], R3: ['BACK', () => go('more')] }; },
+  opts() { return { L0: ['DONATE £10', () => { if (S.bal < 1000) { SFX.err(); msg(['INSUFFICIENT FUNDS'], 'more'); return; } S.bal -= 1000; const h = HINTS[Math.min(hintIndex(), HINTS.length - 1)]; const r = (mkPaper('receipt', 'CHARITY RECEIPT', ['SOCIETY FOR LONELY', 'MACHINES', '--------------------------', rowLR('DONATION', '£10'), '--------------------------', 'THANK YOU. A LITTLE', 'SOMETHING IN RETURN:', ''].concat(wrap(h[0], 26), [''], wrap(h[1], 26)))); queueReceipt(r); SFX.ok(); go('rview', { r, next: 'more' }); }], R3: ['BACK', () => go('more')] }; },
   draw() { Ct(0, 'CHARITY', th.hi); Ct(1, '£10 TO THE SOCIETY FOR', th.fg); Ct(2, 'LONELY MACHINES?', th.fg); },
 });
 def('founder', {
@@ -1202,7 +1252,7 @@ def('diag', {
 });
 /* ---- time travel ---- */
 function startTravel(to) {
-  if (S.cardIn) { addWallet(S.cardIn); S.cardIn = null; SFX.take(); }
+  if (S.cardIn) { dropPend(); addWallet(S.cardIn); S.cardIn = null; SFX.take(); }
   S.sel = null; S.exam = null;
   S.travel = { t: 0, to, from: S.era }; SFX.travel(); go('travel', { to, from: S.era });
 }
@@ -1464,7 +1514,7 @@ def('founded', {
 });
 def('thanks', {
   enter(s) { s.ejected = false; },
-  update(s) { if (!s.ejected && s.t > 1.2) { s.ejected = true; ejectCard(mkCard('founder')); } if (s.ejected && !S.out.card && s.t > 1.6) go('final'); },
+  update(s) { if (!s.ejected && s.t > 1.2) { s.ejected = true; const fc = mkCard('founder'); fc.fresh = true; ejectCard(fc); } if (s.ejected && !S.out.card && s.t > 1.6) go('final'); },
   draw(s) { Ct(1, 'THANK YOU, FOUNDER.', th.hi); if (SAVE.initials) Ct(2, SAVE.initials + '.', th.fg); if (s.ejected) { Ct(4, 'PLEASE TAKE YOUR'); Ct(5, 'FOUNDER CARD', th.hi); } },
 });
 def('final', {
@@ -1494,7 +1544,7 @@ function insertCard(it) {
   removeWallet(it); S.cardIn = it; S.sel = null; SFX.cardIn(); go('reading');
 }
 function tapCardSlot() {
-  if (S.out.card) { if (T - S.out.cardT < 0.45) return; addWallet(S.out.card); S.out.card = null; SFX.take(); return; }
+  if (S.out.card) { if (T - S.out.cardT < 0.45) return; const c = S.out.card; addWallet(c); S.out.card = null; SFX.take(); if (c.fresh) { delete c.fresh; revealCard(c); } return; }
   const h = heldItem();
   if (h && h.kind === 'card') { insertCard(h); return; }
   if (h) { SFX.err(); say("THAT WON'T FIT THE CARD SLOT."); return; }
@@ -1548,7 +1598,7 @@ function tapBrick(b) {
     S.removed[b.key] = 1; S.removedT[b.key] = T; SFX.brick();
     if (PATTERN.every(k => S.removed[k])) {
       S.portal = true; S.portalT = T; SFX.portal(); reach(15);
-      after(1.6, () => { if (S.cardIn) { ejectCard(S.cardIn); S.cardIn = null; } S.sel = null; go('portal'); });
+      after(1.6, () => { if (S.cardIn) { dropPend(); ejectCard(S.cardIn); S.cardIn = null; } S.sel = null; go('portal'); });
     }
     return;
   }
@@ -1578,7 +1628,7 @@ function tapGlass() {
 const HINT_FAST = Q.has('hintfast');
 let HINTS_FORCE = false;
 const hintsOn = () => !TESTING || HINTS_FORCE;
-const HINT_PAUSE = new Set(['pong', 'pongintro', 'pongend', 'hiscore', 'selftest', 'calib', 'dec71', 'travel', 'compound', 'sendback', 'founded', 'thanks', 'final', 'paradox', 'counting', 'wdwait', 'reading', 'help', 'sign', 'goldaward', 'topupsent', 'dep67', 'back2026', 'retained', 'wdallgo']);
+const HINT_PAUSE = new Set(['rview', 'rask', 'rask2', 'pong', 'pongintro', 'pongend', 'hiscore', 'selftest', 'calib', 'dec71', 'travel', 'compound', 'sendback', 'founded', 'thanks', 'final', 'paradox', 'counting', 'wdwait', 'reading', 'help', 'sign', 'goldaward', 'topupsent', 'dep67', 'back2026', 'retained', 'wdallgo']);
 const SVC = ['service', 'cassettes', 'cass4', 'calib', 'journal', 'clocksync', 'clockdate', 'diag', 'selftest'];
 const hasItem = f => S.wallet.some(f);
 const hasNote = d => hasItem(i => i.kind === 'note' && i.denom === d && !i.half && !i.era);
@@ -1834,11 +1884,15 @@ function tap(x, y) {
   audio();
   if (S) S.lastInput = T;
   const pm = LS.on ? { x: x - LS.mx, y } : p;   // the same point in the machine's own space
-  if (S && S.exam && !LS.on) { examTap(p); return; }
+  const icons = () => {
+    if (inR(p, RECT.sound)) { muted = !muted; try { localStorage.setItem('hitw.mute', muted ? '1' : '0'); } catch (e) { } return true; }
+    if (inR(p, RECT.rotate) && (PH === 'title' || PH === 'play')) { toggleRotate(); return true; }
+    return false;
+  };
+  if (S && S.exam && !LS.on) { if (!(S.sms && !S.sms.open) && icons()) return; examTap(p); return; }   // the icons still work with an item open
   if (S && PH === 'play' && S.bubble && pm.x >= 0 && pm.x < W && bubbleTap(pm)) return;
   if (S && PH === 'play' && S.sms && !S.sms.open && T - S.sms.t > 0.4 && pm.y < 40 && pm.x >= 0 && pm.x < W) { openSms(); return; }
-  if (inR(p, RECT.sound)) { muted = !muted; try { localStorage.setItem('hitw.mute', muted ? '1' : '0'); } catch (e) { } return; }
-  if (inR(p, RECT.rotate) && (PH === 'title' || PH === 'play')) { toggleRotate(); return; }
+  if (icons()) return;
   if (PH === 'title') {
     // hidden: tap the version number three times to forget everything
     if (resetPrompt) { if (y >= CH - 48 && y < CH - 16) { SAVE = freshSave(); persist(); SFX.ok(); } resetPrompt = false; titleCancel = 0; return; }
@@ -1914,7 +1968,7 @@ function examTile() { return S.sel ? tileByKey(S.sel) : null; }
 function examTap(p) {
   const e = S.exam; const it = e.it;
   if (inR(p, EX.close) || p.y < 196) { S.exam = null; SFX.soft(); return; }
-  if (it.kind === 'card' && inR(p, EX.mid)) { e.face = 1 - e.face; SFX.soft(); return; }
+  if (it.kind === 'card' && (inR(p, EX.mid) || inR(p, { x: 36, y: 228, w: 168, h: 106 }))) { if (e.anim) { e.anim = 0; e.face = 1; } else e.face = 1 - e.face; SFX.soft(); return; }
   const t = examTile();
   if (it.kind === 'note' && t && t.items.length > 1 && t.items.includes(it) && (inR(p, EX.prev) || inR(p, EX.next))) {
     let i = t.items.indexOf(it); i = (i + (inR(p, EX.next) ? 1 : t.items.length - 1)) % t.items.length; S.gidx[t.key] = i; e.it = t.items[i]; SFX.soft(); return;
@@ -1922,6 +1976,19 @@ function examTap(p) {
   if (it.kind === 'paper') { const n = paperLines(it).length; const vis = 20; if (inR(p, EX.up)) { e.scroll = Math.max(0, e.scroll - 6); return; } if (inR(p, EX.down)) { e.scroll = Math.min(Math.max(0, n - vis), e.scroll + 6); return; } }
 }
 function paperLines(it) { return it.lines || []; }
+// a new card turns over once by itself (so you know it has a back), then settles face up
+function revealCard(c) { S.exam = { it: c, uv: false, face: 0, scroll: 0, reveal: true, anim: T }; }
+function cardAnim(e) {
+  if (!e.anim) return { sx: 1, face: e.face };
+  const t = T - e.anim, f = (a, b) => clamp((t - a) / (b - a), 0, 1);
+  if (t >= 2.5) { e.anim = 0; e.face = 0; return { sx: 1, face: 0 }; }
+  if (t < 0.5) return { sx: 1, face: 0 };
+  if (t < 0.75) return { sx: 1 - f(0.5, 0.75), face: 0 };
+  if (t < 1.0) return { sx: f(0.75, 1.0), face: 1 };
+  if (t < 2.0) return { sx: 1, face: 1 };
+  if (t < 2.25) return { sx: 1 - f(2.0, 2.25), face: 1 };
+  return { sx: f(2.25, 2.5), face: 0 };
+}
 
 /* ---------------- phases ---------------- */
 let introFromTitle = false;
@@ -1938,7 +2005,7 @@ function startEnding() { PH = 'ending'; PHT = 0; S.sel = null; S.exam = null; SA
 function update(dt) {
   T += dt; PHT += dt;
   if (PH === 'title') return;
-  if (PH === 'intro') { if (PHT >= introLen()) { PH = 'play'; PHT = 0; } }
+  if (PH === 'intro') { if (PHT >= introLen()) { PH = 'play'; PHT = 0; if (SAVE.day <= 1 && !SAVE.completed) { const d = S.wallet.find(i => i.card === 'debit'); if (d) revealCard(d); } } }
   if (PH === 'midnight') { if (PHT > 4) { PH = 'daycard'; PHT = 0; SAVE.day++; persist(); } return; }
   if (PH === 'daycard') { if (PHT > dayCardLen()) { startGame(); } return; }
   if (PH === 'ending') { return; }
@@ -2467,7 +2534,7 @@ function drawTile(t, x, y, sel) {
 }
 function drawCardMini(c, x, y) {
   const col = { debit: '#1f6fb2', member: '#6b3fa0', gold: '#d9a520', engineer: '#e0701c', founder: '#1d1d22' }[c];
-  rrect(x, y, 28, 18, col); rect(x + 1, y + 1, 26, 1, 'rgba(255,255,255,0.35)');
+  rround(x, y, 28, 18, 4, col); rect(x + 3, y + 1, 22, 1, 'rgba(255,255,255,0.35)');
   rect(x + 3, y + 6, 6, 5, c === 'founder' ? '#d9a520' : '#e6d070'); rect(x + 5, y + 6, 1, 5, 'rgba(0,0,0,0.25)');
   rect(x + 3, y + 14, 18, 1, 'rgba(255,255,255,0.6)');
   if (c === 'engineer') rect(x, y + 2, 28, 3, '#1a1a1a');
@@ -2510,7 +2577,11 @@ function drawExam(land) {
   txt(itemName(it) + (e.uv ? ' · UV' : ''), land ? 26 : 10, 202, '#cbbfb0');
   rrect(EX.close.x, EX.close.y, EX.close.w, EX.close.h, '#3a2c22'); txt('×', EX.close.x + 8, EX.close.y + 5, '#ffe0b0');
   if (it.kind === 'note') drawNoteBig(it, e.uv);
-  else if (it.kind === 'card') drawCardBig(it, e.face, e.uv);
+  else if (it.kind === 'card') {
+    const a = cardAnim(e);
+    if (a.sx < 1) { ctx.save(); ctx.translate(120, 0); ctx.scale(Math.max(0.04, a.sx), 1); ctx.translate(-120, 0); drawCardBig(it, a.face, e.uv); ctx.restore(); }
+    else drawCardBig(it, a.face, e.uv);
+  }
   else if (it.kind === 'coin') drawCoinBig(e.uv);
   else if (it.kind === 'paper') drawPaperBig(it, e);
   if (e.uv) { ctx.fillStyle = 'rgba(80,20,160,0.22)'; ctx.fillRect(0, 196, W, 220); }
@@ -2558,7 +2629,7 @@ const CARDTXT = {
 function drawCardBig(it, face, uv) {
   const x = 36, y = 228, w = 168, h = 106; const c = it.card;
   const col = { debit: '#1f6fb2', member: '#6b3fa0', gold: '#d9a520', engineer: '#e0701c', founder: '#1d1d22' }[c];
-  rrect(x, y, w, h, col); rrect(x + 1, y + 1, w - 2, h - 2, col); rect(x + 2, y + 1, w - 4, 1, 'rgba(255,255,255,0.4)');
+  rround(x, y, w, h, 8, col); rect(x + 6, y + 1, w - 12, 1, 'rgba(255,255,255,0.4)');
   for (let i = 0; i < w; i += 3) rect(x + i, y + 60 + Math.round(Math.sin(i * 0.08) * 6), 2, 1, 'rgba(255,255,255,0.12)');
   const tc = c === 'gold' ? '#3a2400' : c === 'founder' ? '#e8c050' : '#ffffff';
   const L = CARDTXT[c][face].slice(); if (c === 'founder' && face === 0 && SAVE.initials) L[5] = SAVE.initials; if (c === 'founder' && face === 1) L[1] = SAVE.initials || '';
@@ -2852,6 +2923,7 @@ console.log('PERPETUAL BUILDING SOCIETY · EST 1887 · Hello, engineer. Percy sa
 
 /* ---------------- autopilot (dev skip + test harness) ---------------- */
 function tc(r, kind) {   // kind: 'm' machine space (default), 'w' canvas (wallet panel), 'e' exam space
+  if (S && S.exam && S.exam.reveal && kind !== 'e') S.exam = null;
   const c = ctr(r);
   if (kind === 'w' || !LS.on) tap(c.x, c.y);
   else if (kind === 'e') { const o = exOff(); tap(c.x + o.x, c.y + o.y); }
@@ -2957,6 +3029,8 @@ function runRoute(opts) {
         if (S.out.card && T - S.out.cardT > 0.5) { tc(RECT.cardSlot); sim(HUMAN.tap); }
         if (S.out.cash && T >= S.out.cashReady) { tc(RECT.dispenser); sim(HUMAN.tap); }
         if (S.out.receipt && T - S.out.receiptT > 1.05) { tc(RECT.receipt); sim(HUMAN.tap); }
+        if (SCR.name === 'rview' && SCR.t > 0.4) { tc(KEYR.ENTER); sim(HUMAN.tap); }
+        if ((SCR.name === 'rask' || SCR.name === 'rask2') && SCR.t > 0.4) { tc(BTN.R3); sim(HUMAN.tap); }
         return SCR.name === 'idle' && !S.out.card && !S.out.cash && !S.out.receipt;
       }, 'collect', 30000);
     }
@@ -2990,7 +3064,7 @@ window.HITW = {
   key(k) { tc(KEYR[k]); }, btn(id) { tc(BTN[id]); }, tc, sel(key) { selTile(t => t.key === key); }, selPaper(p) { selTile(PRED.paper(p)); }, selCoin() { selTile(PRED.coin()); },
   hintIndex: () => hintIndex(), get tilesFull() { return tiles(); },
   hints(on) { HINTS_FORCE = on; }, motion(x, y) { onMotion({ accelerationIncludingGravity: { x, y, z: 0 } }); }, get vrot() { return VROT; }, get gsign() { return gSign; }, set force(v) { ROT_FORCE = v; fit(); }, get rot() { return CUR_ROT; }, fit() { fit(); }, hook(f) { SIMHOOK = f; }, act(n) { tcAct(n); }, ex(n) { tcEx(n); }, get LS() { return LS; }, get CW() { return CW; }, get CH() { return CH; }, goal: () => goalNow(), get hg() { return S.hg; }, get bubble() { return S.bubble; }, get taunt() { return S.taunt; },
-  skipIntro() { if (PH === 'intro') PHT = introLen(); sim(20); },
+  skipIntro() { if (PH === 'intro') PHT = introLen(); sim(20); if (S && S.exam && S.exam.reveal) S.exam = null; },
 };
 
 /* ---------------- boot ---------------- */
